@@ -1,8 +1,8 @@
 import warnings
 from functools import wraps, lru_cache
-from importlib.metadata import version
+#from importlib.metadata import version
 
-__version__ = version('census')
+__version__ = '0.8.23' #version('census')
 
 ALL = '*'
 
@@ -523,7 +523,86 @@ class SF1Client(Client):
             'for': 'zip code tabulation area (or part):{}'.format(zcta),
             'in': 'state:{}'.format(state_fips),
         }, **kwargs)
+class SF3Client(Client):
 
+    default_year = 2000
+    dataset = 'sf3'
+
+    years = (2000,)
+
+    def _switch_endpoints(self, year):
+
+        self.endpoint_url = 'https://api.census.gov/data/%s/dec/%s'
+        self.definitions_url = 'https://api.census.gov/data/%s/dec/%s/variables.json'
+        self.definition_url = 'https://api.census.gov/data/%s/dec/%s/variables/%s.json'
+        self.groups_url = 'https://api.census.gov/data/%s/dec/%s/groups.json'
+
+    def tables(self, *args, **kwargs):
+        self._switch_endpoints(kwargs.get('year', self.default_year))
+        return super(SF3Client, self).tables(*args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        self._switch_endpoints(kwargs.get('year', self.default_year))
+
+        return super(SF3Client, self).get(*args, **kwargs)
+
+    @supported_years()
+    def state_county_subdivision(self, fields, state_fips,
+                                 county_fips, subdiv_fips, **kwargs):
+        return self.get(fields, geo={
+            'for': 'county subdivision:{}'.format(subdiv_fips),
+            'in': 'state:{} county:{}'.format(state_fips, county_fips),
+        }, **kwargs)
+
+    @supported_years()
+    def state_county_tract(self, fields, state_fips,
+                           county_fips, tract, **kwargs):
+        return self.get(fields, geo={
+            'for': 'tract:{}'.format(tract),
+            'in': 'state:{} county:{}'.format(state_fips, county_fips),
+        }, **kwargs)
+
+    @supported_years()
+    def state_county_blockgroup(self, fields, state_fips, county_fips,
+                                blockgroup, tract=None, **kwargs):
+        geo = {
+            'for': 'block group:{}'.format(blockgroup),
+            'in': 'state:{} county:{}'.format(state_fips, county_fips),
+        }
+        if tract:
+            geo['in'] += ' tract:{}'.format(tract)
+        return self.get(fields, geo=geo, **kwargs)
+
+    @supported_years(2000)
+    def state_msa(self, fields, state_fips, msa, **kwargs):
+        return self.get(fields, geo={
+            'for': ('metropolitan statistical area/' +
+                    'micropolitan statistical area (or part):{}'.format(msa)),
+            'in': 'state:{}'.format(state_fips),
+        }, **kwargs)
+
+    @supported_years(2000)
+    def state_csa(self, fields, state_fips, csa, **kwargs):
+        return self.get(fields, geo={
+            'for': 'combined statistical area (or part):{}'.format(csa),
+            'in': 'state:{}'.format(state_fips),
+        }, **kwargs)
+
+    @supported_years(2000)
+    def state_district_place(self, fields, state_fips,
+                             district, place, **kwargs):
+        return self.get(fields, geo={
+            'for': 'place/remainder (or part):{}'.format(place),
+            'in': 'state:{} congressional district:{}'.format(
+                state_fips, district),
+        }, **kwargs)
+
+    @supported_years(2000)
+    def state_zipcode(self, fields, state_fips, zcta, **kwargs):
+        return self.get(fields, geo={
+            'for': 'zip code tabulation area (or part):{}'.format(zcta),
+            'in': 'state:{}'.format(state_fips),
+        }, **kwargs)
 
 class PLClient(Client):
 
@@ -601,6 +680,7 @@ class Census(object):
         self.acs1dp = ACS1DpClient(key, year, session)
         self.sf1 = SF1Client(key, year, session)
         self.pl = PLClient(key, year, session)
+        self.sf3 = SF3Client(key, year, session)
 
     @property
     def acs(self):
